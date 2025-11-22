@@ -4,8 +4,9 @@ import (
 	"log"
 	"net/http"
 
+	"north-post/service/internal/transport/http/v1/admin"
+
 	"github.com/gin-gonic/gin"
-	"github.com/north-post/service/internal/transport/http/v1/admin"
 )
 
 func main() {
