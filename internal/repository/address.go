@@ -24,18 +24,22 @@ func NewAddressRepository(client *firestore.Client, logger *slog.Logger) *Addres
 	}
 }
 
-// Get All addresses from the repository
-// TODO: Pagination when the content size is getting larger
 type GetAllAddressesOptions struct {
-	Language string
+	Language models.Language
 	Tags     []string
 	Limit    int
 }
 
-func (r *AddressRepository) GetAllAddresses(c context.Context, opts GetAllAddressesOptions) ([]models.AddressItem, error) {
-	collectionName := fmt.Sprintf("%s_%s", addressTablePrefix, opts.Language)
-	query := r.client.Collection(collectionName).Query
+type GetAddressByIdOption struct {
+	Language  models.Language
+	AddressID string
+}
 
+// Get All addresses from the repository
+// TODO: Pagination when the content size is getting larger
+func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddressesOptions) ([]models.AddressItem, error) {
+	collectionName := getCollectionName(addressTablePrefix, opts.Language)
+	query := r.client.Collection(collectionName).Query
 	// Apply filters
 	if len(opts.Tags) > 0 {
 		query = query.Where("tags", "array-contains-any", opts.Tags)
@@ -43,14 +47,11 @@ func (r *AddressRepository) GetAllAddresses(c context.Context, opts GetAllAddres
 	if opts.Limit > 0 {
 		query = query.Limit(opts.Limit)
 	}
-
 	// execute query
-	iter := query.Documents(c)
+	iter := query.Documents(ctx)
 	defer iter.Stop()
-
 	var addresses []models.AddressItem
 	failedDocs := 0
-
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -66,22 +67,34 @@ func (r *AddressRepository) GetAllAddresses(c context.Context, opts GetAllAddres
 			failedDocs++
 			continue
 		}
-
 		addresses = append(addresses, address)
 	}
 	if failedDocs > 0 {
 		r.logger.Warn("some documents failed to parse", "count", failedDocs)
 	}
-
 	return addresses, nil
 }
 
-// Get a single address by ID
-type GetAddressByIdOption struct {
-	Language  string
-	AddressID string
+// Get a address by ID
+func (r *AddressRepository) GetAddressById(ctx context.Context, opts GetAddressByIdOption) (*models.AddressItem, error) {
+	collectionName := getCollectionName(addressTablePrefix, opts.Language)
+	docRef := r.client.Collection(collectionName).Doc(opts.AddressID)
+	// get document
+	doc, err := docRef.Get(ctx)
+	if err != nil {
+		r.logger.Error("failed to get address document", "addressID", opts.AddressID, "error", err)
+		return nil, fmt.Errorf("failed to get address with ID %s: %w", opts.AddressID, err)
+	}
+	// parse data
+	var address models.AddressItem
+	if err := doc.DataTo(&address); err != nil {
+		r.logger.Error("failed to parse address document", "addressID", opts.AddressID, "error", err)
+		return nil, fmt.Errorf("failed to parse address data: %w", err)
+	}
+	return &address, nil
 }
 
-func (r *AddressRepository) GetById(c context.Context, opts GetAddressByIdOption) (*models.AddressItem, error) {
-	return nil, nil
+// =========== Helper functions ==========
+func getCollectionName(tablePrefix string, language models.Language) string {
+	return fmt.Sprintf("%s_%s", tablePrefix, language.Get())
 }

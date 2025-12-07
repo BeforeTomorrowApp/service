@@ -14,9 +14,10 @@ type Handlers struct {
 func SetupAdminRouter(router *gin.RouterGroup, h *Handlers, adminMiddleware gin.HandlerFunc) {
 	admin := router.Group("/admin", adminMiddleware)
 	{
-		addresses := admin.Group("/addresses")
+		address := admin.Group("/address")
 		{
-			addresses.POST("", h.Address.GetAddresses)
+			address.POST("", h.Address.GetAddresses)
+			address.GET("/:id", h.Address.GetAddressById)
 		}
 		// health check
 		admin.GET("/healthcheck", func(c *gin.Context) {
