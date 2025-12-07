@@ -1,4 +1,4 @@
-package dto
+package models
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ const (
 )
 
 func (l Language) Validate() error {
-	switch l {
+	switch l.Upper() {
 	case LanguageZH, LanguageEN:
 		return nil
 	default:
@@ -28,4 +28,8 @@ func (l Language) Validate() error {
 
 func (l Language) Get() string {
 	return strings.ToLower(string(l))
+}
+
+func (l Language) Upper() Language {
+	return Language(strings.ToUpper(string(l)))
 }

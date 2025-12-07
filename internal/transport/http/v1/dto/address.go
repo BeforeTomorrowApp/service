@@ -5,14 +5,18 @@ import (
 )
 
 type GetAllAddressesRequest struct {
-	Language Language `json:"language" binding:"required"`
-	Tags     []string `json:"tags,omitempty"`
-	Limit    int      `json:"limit,omitempty"`
+	Language models.Language `json:"language" binding:"required"`
+	Tags     []string        `json:"tags,omitempty"`
+	Limit    int             `json:"limit,omitempty"`
 }
 
 type GetAllAddressResponse struct {
 	Data  []AddressItemDTO `json:"data"`
 	Count int              `json:"count"`
+}
+
+type GetAddressByIdResponse struct {
+	Data AddressItemDTO `json:"data"`
 }
 
 type AddressItemDTO struct {
