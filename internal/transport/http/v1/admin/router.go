@@ -20,7 +20,7 @@ func SetupAdminRouter(router *gin.RouterGroup, h *Handlers, adminMiddleware gin.
 
 			address.POST("", h.Address.GetAddresses)
 
-			address.PUT("/new", h.Address.CreateNewAddress)
+			address.PUT("", h.Address.CreateNewAddress)
 		}
 		// health check
 		admin.GET("/healthcheck", func(c *gin.Context) {
