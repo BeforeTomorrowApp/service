@@ -26,7 +26,7 @@ func (m *mockAddressRepository) GetAllAddresses(ctx context.Context, opts reposi
 	return addresses, args.Error(1)
 }
 
-func (m *mockAddressRepository) GetAddressById(ctx context.Context, opts repository.GetAddressByIdOption) (*models.AddressItem, error) {
+func (m *mockAddressRepository) GetAddressById(ctx context.Context, opts repository.GetAddressByIdOptions) (*models.AddressItem, error) {
 	args := m.Called(ctx, opts)
 	var address *models.AddressItem
 	if value := args.Get(0); value != nil {
@@ -174,13 +174,13 @@ func TestAddressService_GetAddressById(t *testing.T) {
 		Language: models.LanguageZH,
 		ID:       "",
 	}
-	expectedOptions := repository.GetAddressByIdOption{
+	expectedOptions := repository.GetAddressByIdOptions{
 		Language: input.Language,
 		ID:       input.ID,
 	}
 	repo.On("GetAddressById",
 		mock.Anything,
-		mock.MatchedBy(func(opts repository.GetAddressByIdOption) bool {
+		mock.MatchedBy(func(opts repository.GetAddressByIdOptions) bool {
 			if opts.Language != expectedOptions.Language {
 				return false
 			}
@@ -205,13 +205,13 @@ func TestAddressService_GetAddressById_Error(t *testing.T) {
 		Language: models.LanguageZH,
 		ID:       "",
 	}
-	expectedOptions := repository.GetAddressByIdOption{
+	expectedOptions := repository.GetAddressByIdOptions{
 		Language: input.Language,
 		ID:       input.ID,
 	}
 	repo.On("GetAddressById",
 		mock.Anything,
-		mock.MatchedBy(func(opts repository.GetAddressByIdOption) bool {
+		mock.MatchedBy(func(opts repository.GetAddressByIdOptions) bool {
 			if opts.Language != expectedOptions.Language {
 				return false
 			}
