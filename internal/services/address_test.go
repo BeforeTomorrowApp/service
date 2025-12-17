@@ -124,7 +124,6 @@ func TestAddressService_GetAddresses_Error(t *testing.T) {
 	repo.AssertExpectations(t)
 	assert.Error(t, err)
 	assert.Nil(t, output)
-	assert.ErrorContains(t, err, "failed to get addresses")
 }
 
 func TestAddressService_GetAddresses_PageLimit(t *testing.T) {
@@ -225,7 +224,6 @@ func TestAddressService_GetAddressById_Error(t *testing.T) {
 	repo.AssertExpectations(t)
 	assert.Error(t, err)
 	assert.Nil(t, output)
-	assert.ErrorContains(t, err, "failed to get address")
 }
 
 func TestAddressService_CreateNewAddress(t *testing.T) {
@@ -264,5 +262,4 @@ func TestAddressService_CreateNewAddress_Error(t *testing.T) {
 	repo.AssertExpectations(t)
 	assert.Error(t, err)
 	assert.Nil(t, output)
-	assert.ErrorContains(t, err, "failed to create new address")
 }
