@@ -16,16 +16,17 @@ func SetupAdminRouter(router *gin.RouterGroup, h *Handlers, adminMiddleware gin.
 	{
 		address := admin.Group("/address")
 		{
+			// GET
 			address.GET("/:id", h.Address.GetAddressById)
-
+			// POST
 			address.POST("", h.Address.GetAddresses)
 			address.POST("/generate", h.Address.GenerateNewAddress)
-
+			// PUT
 			address.PUT("", h.Address.CreateNewAddress)
 		}
 		prompt := admin.Group("/prompt")
 		{
-			prompt.GET("/newaddress", h.Prompt.GetSystemAddressGenerationPrompt)
+			prompt.GET("/system/address", h.Prompt.GetSystemAddressGenerationPrompt)
 		}
 	}
 }

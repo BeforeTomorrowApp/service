@@ -40,15 +40,15 @@ type StructuredCompletionOptions struct {
 	// MaxTokens   *int64
 }
 
-func StructuredCompletion[T interface{}](
+func (l *LLMClient) StructuredCompletion(
 	ctx context.Context,
-	l *LLMClient,
 	opts StructuredCompletionOptions,
-	schemaInstance T,
-) (*T, error) {
+	schemaInstance interface{},
+	result interface{},
+) error {
 	schema, err := gptschema.GenerateSchema(schemaInstance)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate schema: %w", err)
+		return fmt.Errorf("failed to generate schema: %w", err)
 	}
 	// Set default model and effort if not provided
 	model := opts.Model
@@ -76,7 +76,7 @@ func StructuredCompletion[T interface{}](
 	}
 	if len(messages) == 0 {
 		l.logger.Error("no system and user message provided")
-		return nil, fmt.Errorf("no user or system message provided")
+		return fmt.Errorf("no user or system message provided")
 	}
 	completionParams := openai.ChatCompletionNewParams{
 		Messages: messages,
@@ -90,19 +90,18 @@ func StructuredCompletion[T interface{}](
 	chat, err := l.LLM.Chat.Completions.New(ctx, completionParams)
 	if err != nil {
 		l.logger.Error("chat completion failed", "error", err)
-		return nil, fmt.Errorf("chat completion failed: %w", err)
+		return fmt.Errorf("chat completion failed: %w", err)
 	}
 	// check if we got a valid response
 	if len(chat.Choices) == 0 {
 		l.logger.Error("no choices returned from completion")
-		return nil, fmt.Errorf("no choices returned from completion")
+		return fmt.Errorf("no choices returned from completion")
 	}
 	// parse JSON response into the target struct
-	var result T
 	content := chat.Choices[0].Message.Content
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
+	if err := json.Unmarshal([]byte(content), result); err != nil {
 		l.logger.Error("failed to unmarshal response", "error", err, "content", content)
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	return &result, nil
+	return nil
 }

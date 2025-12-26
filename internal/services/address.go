@@ -19,12 +19,16 @@ type addressRepository interface {
 	CreateNewAddress(context.Context, repository.CreateNewAddressOption) (string, error)
 }
 
-type AddressService struct {
-	repo addressRepository
-	llm  *infra.LLMClient
+type llmClient interface {
+	StructuredCompletion(context.Context, infra.StructuredCompletionOptions, interface{}, interface{}) error
 }
 
-func NewAddressService(repo addressRepository, llm *infra.LLMClient) *AddressService {
+type AddressService struct {
+	repo addressRepository
+	llm  llmClient
+}
+
+func NewAddressService(repo addressRepository, llm llmClient) *AddressService {
 	return &AddressService{
 		repo: repo,
 		llm:  llm,
@@ -130,7 +134,8 @@ func (s *AddressService) GenerateNewAddress(ctx context.Context, input GenerateA
 		// may insert temperature field here in the future
 	}
 	schema := models.BatchAddressGenerationSchema{}
-	result, err := infra.StructuredCompletion(ctx, s.llm, opts, schema)
+	var result models.BatchAddressGenerationSchema
+	err := s.llm.StructuredCompletion(ctx, opts, schema, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate address: %w", err)
 	}

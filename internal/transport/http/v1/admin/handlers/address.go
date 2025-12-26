@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"north-post/service/internal/domain/v1/models"
@@ -12,12 +13,19 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
+type addressService interface {
+	CreateNewAddress(ctx context.Context, input services.CreateNewAddressInput) (*services.CreateNewAddressOutput, error)
+	GenerateNewAddress(ctx context.Context, input services.GenerateAddressInput) (*services.GenerateAddressOutput, error)
+	GetAddressById(ctx context.Context, input services.GetAddressByIdInput) (*services.GetAddressByIdOutput, error)
+	GetAddresses(ctx context.Context, input services.GetAddressesInput) (*services.GetAddressesOutput, error)
+}
+
 type AddressHandler struct {
-	service *services.AddressService
+	service addressService
 	logger  *slog.Logger
 }
 
-func NewAddressHandler(service *services.AddressService, logger *slog.Logger) *AddressHandler {
+func NewAddressHandler(service addressService, logger *slog.Logger) *AddressHandler {
 	return &AddressHandler{
 		service: service,
 		logger:  logger,
