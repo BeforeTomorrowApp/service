@@ -1,4 +1,3 @@
-// internal/services/address_test.go
 package services
 
 import (
@@ -16,11 +15,6 @@ import (
 // Mock repository implementations
 type mockAddressRepository struct {
 	mock.Mock
-}
-
-type mockLLMClient struct {
-	mock.Mock
-	infra.LLMClient
 }
 
 func (m *mockAddressRepository) GetAllAddresses(ctx context.Context, opts repository.GetAllAddressesOptions) ([]models.AddressItem, error) {
@@ -49,10 +43,24 @@ func (m *mockAddressRepository) CreateNewAddress(ctx context.Context, opts repos
 	return args.String(0), args.Error(1)
 }
 
+type mockLLMClient struct {
+	mock.Mock
+}
+
+func (m *mockLLMClient) StructuredCompletion(ctx context.Context, opts infra.StructuredCompletionOptions, schemaInstance interface{}, result interface{}) error {
+	args := m.Called(ctx, opts, schemaInstance, result)
+	if args.Get(0) != nil && result != nil {
+		if out, ok := result.(*models.BatchAddressGenerationSchema); ok {
+			*out = args.Get(0).(models.BatchAddressGenerationSchema)
+		}
+	}
+	return args.Error(1)
+}
+
 func setupAddressService() (*AddressService, *mockAddressRepository, *mockLLMClient) {
 	repo := new(mockAddressRepository)
 	llm := new(mockLLMClient)
-	service := NewAddressService(repo, &llm.LLMClient)
+	service := NewAddressService(repo, llm)
 	return service, repo, llm
 }
 
@@ -271,4 +279,75 @@ func TestAddressService_CreateNewAddress_Error(t *testing.T) {
 	repo.AssertExpectations(t)
 	assert.Error(t, err)
 	assert.Nil(t, output)
+}
+
+func TestAddressService_GenerateNewAddress_EmptyPrompt(t *testing.T) {
+	t.Parallel()
+	service, _, _ := setupAddressService()
+	input := GenerateAddressInput{
+		SystemPrompt:    "sys",
+		Prompt:          "",
+		Model:           "gpt-5-mini",
+		ReasoningEffort: "minimum",
+	}
+	output, err := service.GenerateNewAddress(context.Background(), input)
+	assert.Error(t, err)
+	assert.Nil(t, output)
+	assert.Contains(t, err.Error(), "prompt cannot be empty")
+}
+
+func TestAddressService_GenerateNewAddress(t *testing.T) {
+	t.Parallel()
+	repo := new(mockAddressRepository)
+	llm := new(mockLLMClient)
+	service := NewAddressService(repo, llm)
+	input := GenerateAddressInput{
+		SystemPrompt:    "sys",
+		Prompt:          "generate an address",
+		Model:           "gpt-5-mini",
+		ReasoningEffort: "minimum",
+	}
+	expectedBatch := models.BatchAddressGenerationSchema{
+		Addresses: []models.AddressGenerationSchema{
+			{Name: "test"},
+		},
+	}
+	llm.On(
+		"StructuredCompletion",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+	).Return(expectedBatch, nil).Once()
+	output, err := service.GenerateNewAddress(context.Background(), input)
+	llm.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, 1, len(output.Addresses))
+	assert.Equal(t, "test", output.Addresses[0].Name)
+}
+
+func TestAddressService_GenerateNewAddress_Error(t *testing.T) {
+	t.Parallel()
+	repo := new(mockAddressRepository)
+	llm := new(mockLLMClient)
+	service := NewAddressService(repo, llm)
+	input := GenerateAddressInput{
+		SystemPrompt:    "sys",
+		Prompt:          "generate an address",
+		Model:           "gpt-5-mini",
+		ReasoningEffort: "minimum",
+	}
+	llm.On(
+		"StructuredCompletion",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+	).Return(nil, assert.AnError).Once()
+	output, err := service.GenerateNewAddress(context.Background(), input)
+	llm.AssertExpectations(t)
+	assert.Error(t, err)
+	assert.Nil(t, output)
+	assert.Contains(t, err.Error(), "failed to generate address")
 }
