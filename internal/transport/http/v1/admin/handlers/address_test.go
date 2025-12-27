@@ -117,6 +117,13 @@ func TestGetAddressesById(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
+			name:           "failed request",
+			url:            "/admin/address/1?language=en",
+			mockOutput:     nil,
+			mockError:      errors.New("fail"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
 			name:           "missing id",
 			url:            "/admin/address/?language=en",
 			mockOutput:     nil,
@@ -125,17 +132,24 @@ func TestGetAddressesById(t *testing.T) {
 		},
 		{
 			name:           "missing id",
+			url:            "/admin/address/ ?language=en",
+			mockOutput:     nil,
+			mockError:      errors.New("id required"),
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "missing language",
 			url:            "/admin/address/1",
 			mockOutput:     nil,
 			mockError:      errors.New("language is requires"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "missing id",
-			url:            "/admin/address/1?language=en",
+			name:           "invalid language",
+			url:            "/admin/address/1?language=k",
 			mockOutput:     nil,
-			mockError:      errors.New("fail"),
-			expectedStatus: http.StatusInternalServerError,
+			mockError:      errors.New("error"),
+			expectedStatus: http.StatusBadRequest,
 		},
 	}
 	for _, tt := range tests {
@@ -202,6 +216,85 @@ func TestCreateNewAddress(t *testing.T) {
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			mockSvc.AssertExpectations(t)
+		})
+	}
+}
+
+func TestGenerateNewAddress(t *testing.T) {
+	t.Parallel()
+	mockSvc := new(MockAddressService)
+	handler := NewAddressHandler(mockSvc, slog.Default())
+	router := setupRouter(handler)
+	tests := []struct {
+		name           string
+		body           dto.GenerateNewAddressRequest
+		mockOutput     *services.GenerateAddressOutput
+		mockError      error
+		expectedStatus int
+		expectCall     bool
+	}{
+		{
+			name: "success",
+			body: dto.GenerateNewAddressRequest{
+				Language: "en",
+				Prompt:   "sys",
+			},
+			mockOutput: &services.GenerateAddressOutput{
+				Addresses: []models.AddressItem{
+					{ID: "1", Name: "Test Address"},
+				},
+			},
+			mockError:      nil,
+			expectedStatus: http.StatusOK,
+			expectCall:     true,
+		},
+		{
+			name: "service error",
+			body: dto.GenerateNewAddressRequest{
+				Language: "en",
+				Prompt:   "sys",
+			},
+			mockOutput:     nil,
+			mockError:      errors.New("service failed"),
+			expectedStatus: http.StatusInternalServerError,
+			expectCall:     true,
+		},
+		{
+			name:           "invalid json",
+			body:           dto.GenerateNewAddressRequest{},
+			mockOutput:     nil,
+			mockError:      nil,
+			expectedStatus: http.StatusBadRequest,
+			expectCall:     false,
+		},
+		{
+			name: "invalid language",
+			body: dto.GenerateNewAddressRequest{
+				Language: "k",
+				Prompt:   "sys",
+			},
+			mockOutput:     nil,
+			mockError:      nil,
+			expectedStatus: http.StatusBadRequest,
+			expectCall:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := services.GenerateAddressInput{
+				Language: tt.body.Language,
+				Prompt:   tt.body.Prompt,
+			}
+			mockSvc.On("GenerateNewAddress", mock.Anything, input).
+				Return(tt.mockOutput, tt.mockError).Once()
+			body, _ := json.Marshal(tt.body)
+			req, _ := http.NewRequest("POST", "/admin/address/generate", bytes.NewBuffer(body))
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectCall {
+				mockSvc.AssertExpectations(t)
+			}
 		})
 	}
 }
