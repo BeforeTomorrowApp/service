@@ -8,6 +8,7 @@ import (
 	"north-post/service/internal/services"
 	"north-post/service/internal/transport/http/v1/dto"
 	"north-post/service/internal/transport/http/v1/utils"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -83,7 +84,7 @@ func (h *AddressHandler) GetAddresses(c *gin.Context) {
 // @Router /admin/address/{id} [get]
 func (h *AddressHandler) GetAddressById(c *gin.Context) {
 	id := c.Param("id")
-	if id == "" {
+	if strings.TrimSpace(id) == "" {
 		h.logger.Warn("missing address id parameter")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Address ID is required"})
 		return
