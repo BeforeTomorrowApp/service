@@ -23,9 +23,9 @@ type MockAddressService struct {
 	mock.Mock
 }
 
-func (m *MockAddressService) GetAddresses(ctx context.Context, input services.GetAddressesInput) (*services.GetAddressesOutput, error) {
+func (m *MockAddressService) GetAllAddresses(ctx context.Context, input services.GetAllAddressesInput) (*services.GetAllAddressesOutput, error) {
 	args := m.Called(ctx, input)
-	return args.Get(0).(*services.GetAddressesOutput), args.Error(1)
+	return args.Get(0).(*services.GetAllAddressesOutput), args.Error(1)
 }
 func (m *MockAddressService) GetAddressById(ctx context.Context, input services.GetAddressByIdInput) (*services.GetAddressByIdOutput, error) {
 	args := m.Called(ctx, input)
@@ -43,14 +43,14 @@ func (m *MockAddressService) GenerateNewAddress(ctx context.Context, input servi
 func setupRouter(handler *AddressHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
-	r.POST("/admin/address", handler.GetAddresses)
+	r.POST("/admin/address", handler.GetAllAddresses)
 	r.GET("/admin/address/:id", handler.GetAddressById)
 	r.PUT("/admin/address", handler.CreateNewAddress)
 	r.POST("/admin/address/generate", handler.GenerateNewAddress)
 	return r
 }
 
-func TestGetAddresses(t *testing.T) {
+func TestGetAllAddresses(t *testing.T) {
 	t.Parallel()
 	mockSvc := new(MockAddressService)
 	handler := NewAddressHandler(mockSvc, slog.Default())
@@ -58,16 +58,16 @@ func TestGetAddresses(t *testing.T) {
 	tests := []struct {
 		name           string
 		language       string
-		mockOutput     *services.GetAddressesOutput
+		mockOutput     *services.GetAllAddressesOutput
 		mockError      error
 		expectedStatus int
 	}{
 		{
 			name:     "success",
 			language: "en",
-			mockOutput: &services.GetAddressesOutput{
-				Addresses: []models.AddressItem{{ID: "1"}},
-				Count:     1,
+			mockOutput: &services.GetAllAddressesOutput{
+				Addresses:  []models.AddressItem{{ID: "1"}},
+				TotalCount: 1,
 			},
 			mockError:      nil,
 			expectedStatus: http.StatusOK,
@@ -75,7 +75,7 @@ func TestGetAddresses(t *testing.T) {
 		{
 			name:           "service error",
 			language:       "en",
-			mockOutput:     &services.GetAddressesOutput{},
+			mockOutput:     &services.GetAllAddressesOutput{},
 			mockError:      errors.New("failed"),
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -83,8 +83,8 @@ func TestGetAddresses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reqBody := dto.GetAllAddressesRequest{Language: models.Language(tt.language)}
-			input := services.GetAddressesInput{Language: models.Language(tt.language)}
-			mockSvc.On("GetAddresses", mock.Anything, input).
+			input := services.GetAllAddressesInput{Language: models.Language(tt.language)}
+			mockSvc.On("GetAllAddresses", mock.Anything, input).
 				Return(tt.mockOutput, tt.mockError).Once()
 			body, _ := json.Marshal(reqBody)
 			req, _ := http.NewRequest("POST", "/admin/address", bytes.NewBuffer(body))
@@ -93,6 +93,13 @@ func TestGetAddresses(t *testing.T) {
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			mockSvc.AssertExpectations(t)
+			if w.Code == http.StatusOK {
+				var response dto.GetAllAddressResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.mockOutput.Addresses[0].ID, response.Data.Addresses[0].ID)
+				assert.Equal(t, tt.mockOutput.TotalCount, response.Data.TotalCount)
+			}
 		})
 	}
 }

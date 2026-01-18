@@ -15,7 +15,7 @@ import (
 const defaultPageSize = 100
 
 type addressRepository interface {
-	GetAllAddresses(context.Context, repository.GetAllAddressesOptions) ([]models.AddressItem, error)
+	GetAllAddresses(context.Context, repository.GetAllAddressesOptions) (*repository.GetAllAddressesResponse, error)
 	GetAddressById(context.Context, repository.GetAddressByIdOptions) (*models.AddressItem, error)
 	CreateNewAddress(context.Context, repository.CreateNewAddressOption) (string, error)
 }
@@ -36,15 +36,18 @@ func NewAddressService(repo addressRepository, llm llmClient) *AddressService {
 	}
 }
 
-type GetAddressesInput struct {
-	Language models.Language
-	Tags     []string
-	Limit    int
+type GetAllAddressesInput struct {
+	Language      models.Language
+	Tags          []string
+	PageSize      int
+	StartAfterDoc string
 }
 
-type GetAddressesOutput struct {
-	Addresses []models.AddressItem
-	Count     int
+type GetAllAddressesOutput struct {
+	Addresses  []models.AddressItem
+	TotalCount int64
+	LastDocID  string
+	HasMore    bool
 }
 
 type GetAddressByIdInput struct {
@@ -78,21 +81,28 @@ type GenerateAddressOutput struct {
 	Addresses []models.AddressItem
 }
 
-func (s *AddressService) GetAddresses(ctx context.Context, input GetAddressesInput) (*GetAddressesOutput, error) {
-	limit := input.Limit
-	if limit <= 0 || limit > defaultPageSize {
-		limit = defaultPageSize
+func (s *AddressService) GetAllAddresses(ctx context.Context, input GetAllAddressesInput) (*GetAllAddressesOutput, error) {
+	pageSize := input.PageSize
+	if pageSize <= 0 || pageSize > defaultPageSize {
+		pageSize = defaultPageSize
 	}
 	opts := repository.GetAllAddressesOptions{
-		Language: input.Language,
-		Tags:     input.Tags,
-		Limit:    limit,
+		Language:      input.Language,
+		Tags:          input.Tags,
+		PageSize:      pageSize,
+		StartAfterDoc: input.StartAfterDoc,
 	}
-	addresses, err := s.repo.GetAllAddresses(ctx, opts)
+	response, err := s.repo.GetAllAddresses(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("%w", err)
 	}
-	return &GetAddressesOutput{Addresses: addresses, Count: len(addresses)}, nil
+	return &GetAllAddressesOutput{
+			Addresses:  response.Addresses,
+			TotalCount: response.TotalCount,
+			LastDocID:  response.LastDocID,
+			HasMore:    response.HasMore,
+		},
+		nil
 }
 
 func (s *AddressService) GetAddressById(ctx context.Context, input GetAddressByIdInput) (*GetAddressByIdOutput, error) {

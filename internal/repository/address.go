@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	pb "cloud.google.com/go/firestore/apiv1/firestorepb"
 	"google.golang.org/api/iterator"
 )
 
@@ -32,9 +33,17 @@ func NewAddressRepository(client *firestore.Client, logger *slog.Logger) *Addres
 }
 
 type GetAllAddressesOptions struct {
-	Language models.Language
-	Tags     []string
-	Limit    int
+	Language      models.Language
+	Tags          []string
+	PageSize      int
+	StartAfterDoc string
+}
+
+type GetAllAddressesResponse struct {
+	Addresses  []models.AddressItem
+	TotalCount int64
+	LastDocID  string
+	HasMore    bool
 }
 
 type GetAddressByIdOptions struct {
@@ -54,22 +63,51 @@ type CreateNewAddressOption struct {
 }
 
 // Get All addresses from the repository
-// TODO: Pagination when the content size is getting larger
-func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddressesOptions) ([]models.AddressItem, error) {
+func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddressesOptions) (*GetAllAddressesResponse, error) {
 	collectionName := getAddressCollectionName(opts.Language)
 	query := r.client.Collection(collectionName).Query
 	// Apply filters
 	if len(opts.Tags) > 0 {
 		query = query.Where("tags", "array-contains-any", opts.Tags)
 	}
-	if opts.Limit > 0 {
-		query = query.Limit(opts.Limit)
+	// Sort by updated_at descending
+	firstPageQuery := opts.StartAfterDoc == ""
+	query = query.OrderBy("updatedAt", firestore.Desc)
+	// 1. get total count only for the first page
+	var totalCount int64 // need a cache to store the total count when not first page query
+	if firstPageQuery {
+		aggregationQuery := query.NewAggregationQuery().WithCount("total")
+		aggregationResult, err := aggregationQuery.Get(ctx)
+		if err != nil {
+			r.logger.Error("failed to get count", "error", err)
+			return nil, fmt.Errorf("failed to get total count")
+		}
+		count, ok := aggregationResult["total"]
+		if !ok {
+			r.logger.Error("total not found in aggregation result")
+			return nil, fmt.Errorf("total not found in aggregation result")
+		}
+		totalCount = count.(*pb.Value).GetIntegerValue()
 	}
-	// execute query
+	// 2. Apply pagination
+	if !firstPageQuery {
+		startDoc, err := r.client.Collection(collectionName).Doc(opts.StartAfterDoc).Get(ctx)
+		if err != nil {
+			r.logger.Error("failed to get start document", "error", err, "docID", opts.StartAfterDoc)
+			return nil, fmt.Errorf("failed to get start document %q", opts.StartAfterDoc)
+		}
+		query = query.StartAfter(startDoc)
+	}
+	// fetch one extra to check if there's more
+	if opts.PageSize > 0 {
+		query = query.Limit(opts.PageSize + 1)
+	}
+	// 3. execute query
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 	var addresses []models.AddressItem
 	failedDocs := 0
+	hasMore := false
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -78,6 +116,11 @@ func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddr
 		if err != nil {
 			r.logger.Error("failed to iterate documents", "error", err)
 			return nil, fmt.Errorf("failed to fetch addresses: %w", err)
+		}
+		// check if we have arrived extra document
+		if opts.PageSize > 0 && len(addresses) >= opts.PageSize {
+			hasMore = true
+			break
 		}
 		var address models.AddressItem
 		if err := doc.DataTo(&address); err != nil {
@@ -90,7 +133,16 @@ func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddr
 	if failedDocs > 0 {
 		r.logger.Warn("some documents failed to parse", "count", failedDocs)
 	}
-	return addresses, nil
+	var lastDocId string
+	if len(addresses) > 0 {
+		lastDocId = addresses[len(addresses)-1].ID
+	}
+	return &GetAllAddressesResponse{
+		Addresses:  addresses,
+		TotalCount: totalCount,
+		LastDocID:  lastDocId,
+		HasMore:    hasMore,
+	}, nil
 }
 
 // Get a address by ID
