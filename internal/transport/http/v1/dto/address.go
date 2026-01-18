@@ -50,7 +50,7 @@ type AddressItemDTO struct {
 	BriefIntro string     `json:"briefIntro"`
 	Tags       []string   `json:"tags"`
 	CreatedAt  int64      `json:"createdAt"`
-	UpdatedAt  int64      `json:"updatedAT"`
+	UpdatedAt  int64      `json:"updatedAt"`
 	Address    AddressDTO `json:"address"`
 }
 

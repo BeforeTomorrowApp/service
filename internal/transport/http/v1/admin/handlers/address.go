@@ -61,7 +61,7 @@ func (h *AddressHandler) GetAllAddresses(c *gin.Context) {
 	output, err := h.service.GetAllAddresses(c.Request.Context(), input)
 	if err != nil {
 		h.logger.Error("failed to get addresses", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch address"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	response := dto.GetAllAddressResponse{

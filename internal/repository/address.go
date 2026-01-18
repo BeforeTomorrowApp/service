@@ -71,15 +71,16 @@ func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddr
 		query = query.Where("tags", "array-contains-any", opts.Tags)
 	}
 	// Sort by updated_at descending
+	firstPageQuery := opts.StartAfterDoc == ""
 	query = query.OrderBy("updatedAt", firestore.Desc)
-	// 1. get total count
-	var totalCount int64
-	if opts.StartAfterDoc == "" {
+	// 1. get total count only for the first page
+	var totalCount int64 // need a cache to store the total count when not first page query
+	if firstPageQuery {
 		aggregationQuery := query.NewAggregationQuery().WithCount("total")
 		aggregationResult, err := aggregationQuery.Get(ctx)
 		if err != nil {
 			r.logger.Error("failed to get count", "error", err)
-			return nil, fmt.Errorf("failed to get count: %w", err)
+			return nil, fmt.Errorf("failed to get total count")
 		}
 		count, ok := aggregationResult["total"]
 		if !ok {
@@ -89,11 +90,11 @@ func (r *AddressRepository) GetAllAddresses(ctx context.Context, opts GetAllAddr
 		totalCount = count.(*pb.Value).GetIntegerValue()
 	}
 	// 2. Apply pagination
-	if opts.StartAfterDoc != "" {
+	if !firstPageQuery {
 		startDoc, err := r.client.Collection(collectionName).Doc(opts.StartAfterDoc).Get(ctx)
 		if err != nil {
-			r.logger.Error("failed to get start document", "error", err)
-			return nil, fmt.Errorf("failed to get start document: %w", err)
+			r.logger.Error("failed to get start document", "error", err, "docID", opts.StartAfterDoc)
+			return nil, fmt.Errorf("failed to get start document %q", opts.StartAfterDoc)
 		}
 		query = query.StartAfter(startDoc)
 	}
