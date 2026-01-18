@@ -18,7 +18,7 @@ type addressService interface {
 	CreateNewAddress(ctx context.Context, input services.CreateNewAddressInput) (*services.CreateNewAddressOutput, error)
 	GenerateNewAddress(ctx context.Context, input services.GenerateAddressInput) (*services.GenerateAddressOutput, error)
 	GetAddressById(ctx context.Context, input services.GetAddressByIdInput) (*services.GetAddressByIdOutput, error)
-	GetAddresses(ctx context.Context, input services.GetAddressesInput) (*services.GetAddressesOutput, error)
+	GetAllAddresses(ctx context.Context, input services.GetAllAddressesInput) (*services.GetAllAddressesOutput, error)
 }
 
 type AddressHandler struct {
@@ -52,20 +52,20 @@ func (h *AddressHandler) GetAllAddresses(c *gin.Context) {
 	if !utils.ValidateLanguage(c, req.Language, h.logger) {
 		return
 	}
-	input := services.GetAddressesInput{
-		Language: req.Language,
-		Tags:     req.Tags,
-		Limit:    req.Limit,
+	input := services.GetAllAddressesInput{
+		Language:      req.Language,
+		Tags:          req.Tags,
+		PageSize:      req.PageSize,
+		StartAfterDoc: req.LastDocID,
 	}
-	output, err := h.service.GetAddresses(c.Request.Context(), input)
+	output, err := h.service.GetAllAddresses(c.Request.Context(), input)
 	if err != nil {
 		h.logger.Error("failed to get addresses", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch address"})
 		return
 	}
 	response := dto.GetAllAddressResponse{
-		Data:  dto.ToAddressDTOs(output.Addresses),
-		Count: output.Count,
+		Data: dto.ToGetAllAddressesResponseDTO(output),
 	}
 	c.JSON(http.StatusOK, response)
 }

@@ -2,17 +2,18 @@ package dto
 
 import (
 	"north-post/service/internal/domain/v1/models"
+	"north-post/service/internal/services"
 )
 
 type GetAllAddressesRequest struct {
-	Language models.Language `json:"language" binding:"required"`
-	Tags     []string        `json:"tags,omitempty"`
-	Limit    int             `json:"limit,omitempty"`
+	Language  models.Language `json:"language" binding:"required"`
+	Tags      []string        `json:"tags,omitempty"`
+	PageSize  int             `json:"pageSize,omitempty"`
+	LastDocID string          `json:"lastDocId,omitempty"`
 }
 
 type GetAllAddressResponse struct {
-	Data  []AddressItemDTO `json:"data"`
-	Count int              `json:"count"`
+	Data GetAllAddressesResponseDTO `json:"data"`
 }
 
 type GetAddressByIdResponse struct {
@@ -63,6 +64,13 @@ type AddressDTO struct {
 	Region       string `json:"region" binding:"required"`
 }
 
+type GetAllAddressesResponseDTO struct {
+	Addresses  []AddressItemDTO `json:"addresses"`
+	TotalCount int64            `json:"totalCount"`
+	LastDocID  string           `json:"lastDocId"`
+	HasMore    bool             `json:"hasMore"`
+}
+
 func ToAddressDTO(addressItem models.AddressItem) AddressItemDTO {
 	address := addressItem.Address
 	addressDto := AddressDTO{
@@ -91,6 +99,15 @@ func ToAddressDTOs(addresses []models.AddressItem) []AddressItemDTO {
 		output[i] = ToAddressDTO(addressItem)
 	}
 	return output
+}
+
+func ToGetAllAddressesResponseDTO(output *services.GetAllAddressesOutput) GetAllAddressesResponseDTO {
+	return GetAllAddressesResponseDTO{
+		Addresses:  ToAddressDTOs(output.Addresses),
+		TotalCount: output.TotalCount,
+		LastDocID:  output.LastDocID,
+		HasMore:    output.HasMore,
+	}
 }
 
 func FromCreateAddressDTO(req CreateAddressRequest) models.AddressItem {

@@ -17,13 +17,12 @@ type mockAddressRepository struct {
 	mock.Mock
 }
 
-func (m *mockAddressRepository) GetAllAddresses(ctx context.Context, opts repository.GetAllAddressesOptions) ([]models.AddressItem, error) {
+func (m *mockAddressRepository) GetAllAddresses(ctx context.Context, opts repository.GetAllAddressesOptions) (*repository.GetAllAddressesResponse, error) {
 	args := m.Called(ctx, opts)
-	var addresses []models.AddressItem
-	if value := args.Get(0); value != nil {
-		addresses, _ = value.([]models.AddressItem)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-	return addresses, args.Error(1)
+	return args.Get(0).(*repository.GetAllAddressesResponse), args.Error(1)
 }
 
 func (m *mockAddressRepository) GetAddressById(ctx context.Context, opts repository.GetAddressByIdOptions) (*models.AddressItem, error) {
@@ -68,25 +67,30 @@ func setupAddressService() (*AddressService, *mockAddressRepository, *mockLLMCli
 func TestAddressService_GetAddresses(t *testing.T) {
 	t.Parallel()
 	service, repo, _ := setupAddressService()
-	input := GetAddressesInput{
+	input := GetAllAddressesInput{
 		Language: models.LanguageEN,
 		Tags:     []string{"featured", "outdoor"},
-		Limit:    0,
+		PageSize: 0,
 	}
 	expectedOptions := repository.GetAllAddressesOptions{
 		Language: input.Language,
 		Tags:     input.Tags,
-		Limit:    defaultPageSize,
+		PageSize: defaultPageSize,
 	}
 	expectedAddresses := []models.AddressItem{
 		{ID: "1", Name: "Address One"},
 		{ID: "2", Name: "Address Two"},
 	}
+	expectedResponse := &repository.GetAllAddressesResponse{
+		Addresses:  expectedAddresses,
+		HasMore:    false,
+		TotalCount: 2,
+	}
 	repo.On(
 		"GetAllAddresses",
 		mock.Anything,
 		mock.MatchedBy(func(opts repository.GetAllAddressesOptions) bool {
-			if opts.Language != expectedOptions.Language || opts.Limit != expectedOptions.Limit {
+			if opts.Language != expectedOptions.Language || opts.PageSize != expectedOptions.PageSize {
 				return false
 			}
 			if len(opts.Tags) != len(expectedOptions.Tags) {
@@ -99,47 +103,30 @@ func TestAddressService_GetAddresses(t *testing.T) {
 			}
 			return true
 		}),
-	).Return(expectedAddresses, nil).Once()
-	output, err := service.GetAddresses(context.Background(), input)
+	).Return(expectedResponse, nil).Once()
+	output, err := service.GetAllAddresses(context.Background(), input)
 	repo.AssertExpectations(t)
 	assert.NoError(t, err)
 	assert.NotNil(t, output)
-	assert.Equal(t, expectedAddresses, output.Addresses)
-	assert.Equal(t, len(expectedAddresses), output.Count)
+	assert.Equal(t, expectedResponse.Addresses, output.Addresses)
+	assert.Equal(t, expectedResponse.TotalCount, output.TotalCount)
+	assert.Equal(t, expectedResponse.HasMore, output.HasMore)
 }
 
 func TestAddressService_GetAddresses_Error(t *testing.T) {
 	t.Parallel()
 	service, repo, _ := setupAddressService()
-	input := GetAddressesInput{
+	input := GetAllAddressesInput{
 		Language: models.LanguageZH,
 		Tags:     []string{"cafe"},
-		Limit:    defaultPageSize + 5,
-	}
-	expectedOptions := repository.GetAllAddressesOptions{
-		Language: input.Language,
-		Tags:     input.Tags,
-		Limit:    defaultPageSize,
+		PageSize: defaultPageSize,
 	}
 	repo.On(
 		"GetAllAddresses",
 		mock.Anything,
-		mock.MatchedBy(func(opts repository.GetAllAddressesOptions) bool {
-			if opts.Language != expectedOptions.Language || opts.Limit != expectedOptions.Limit {
-				return false
-			}
-			if len(opts.Tags) != len(expectedOptions.Tags) {
-				return false
-			}
-			for i := range opts.Tags {
-				if opts.Tags[i] != expectedOptions.Tags[i] {
-					return false
-				}
-			}
-			return true
-		}),
+		mock.Anything,
 	).Return(nil, assert.AnError).Once()
-	output, err := service.GetAddresses(context.Background(), input)
+	output, err := service.GetAllAddresses(context.Background(), input)
 	repo.AssertExpectations(t)
 	assert.Error(t, err)
 	assert.Nil(t, output)
@@ -148,15 +135,15 @@ func TestAddressService_GetAddresses_Error(t *testing.T) {
 func TestAddressService_GetAddresses_PageLimit(t *testing.T) {
 	t.Parallel()
 	service, repo, _ := setupAddressService()
-	input := GetAddressesInput{
+	input := GetAllAddressesInput{
 		Language: models.LanguageZH,
 		Tags:     []string{""},
-		Limit:    5,
+		PageSize: defaultPageSize + 5,
 	}
 	expectedOptions := repository.GetAllAddressesOptions{
 		Language: input.Language,
 		Tags:     input.Tags,
-		Limit:    defaultPageSize,
+		PageSize: defaultPageSize,
 	}
 	repo.On(
 		"GetAllAddresses",
@@ -165,7 +152,7 @@ func TestAddressService_GetAddresses_PageLimit(t *testing.T) {
 			if opts.Language != expectedOptions.Language {
 				return false
 			}
-			if opts.Limit == expectedOptions.Limit {
+			if opts.PageSize != expectedOptions.PageSize {
 				return false
 			}
 			if len(opts.Tags) != len(expectedOptions.Tags) {
@@ -179,7 +166,7 @@ func TestAddressService_GetAddresses_PageLimit(t *testing.T) {
 			return true
 		}),
 	).Return(nil, assert.AnError).Once()
-	service.GetAddresses(context.Background(), input)
+	service.GetAllAddresses(context.Background(), input)
 }
 
 func TestAddressService_GetAddressById(t *testing.T) {
