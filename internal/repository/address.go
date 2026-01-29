@@ -171,11 +171,25 @@ func (r *AddressRepository) GetAddressById(ctx context.Context, opts GetAddressB
 
 func (r *AddressRepository) UpdateAddress(ctx context.Context, opts UpdateAddressOption) (*models.AddressItem, error) {
 	collectionName := getAddressCollectionName(opts.Language)
+	docRef := r.client.Collection(collectionName).Doc(opts.ID)
+	// ensure address exists and retrieve existing data
+	doc, err := docRef.Get(ctx)
+	if err != nil {
+		r.logger.Error("failed to get address document dor update", "addressID", opts.ID, "error", err)
+		return nil, fmt.Errorf("failed to get address with ID %s for update: %w", opts.ID, err)
+	}
+	var existingAddress models.AddressItem
+	if err := doc.DataTo(&existingAddress); err != nil {
+		r.logger.Error("failed to parse existing address document for update", "addressID", opts.ID, "error", err)
+		return nil, fmt.Errorf("failed to parse existing address data with ID %s: %w", opts.ID, err)
+	}
+
 	addressItem := opts.AddressItem
+	addressItem.CreatedAt = existingAddress.CreatedAt
 	addressItem.UpdatedAt = time.Now().Unix() // update timestamp
 	addressItem.ID = opts.ID                  // avoid this value been modified by admin user
-	docRef := r.client.Collection(collectionName).Doc(opts.ID)
-	_, err := docRef.Set(ctx, addressItem)
+
+	_, err = docRef.Set(ctx, addressItem)
 	if err != nil {
 		r.logger.Error("failed to update address", "addressID", opts.ID, "error", err)
 		return nil, fmt.Errorf("failed to update address with ID %s: %w", opts.ID, err)

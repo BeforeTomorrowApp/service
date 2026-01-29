@@ -151,6 +151,18 @@ func (h *AddressHandler) CreateNewAddress(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// UpdateAddress updates an existing address entry with language-specific information.
+//
+// @Summary Update an existing address
+// @Description Update an existing address entry with language-specific information
+// @Tags Admin Address
+// @Accept json
+// @Produce json
+// @Param request body dto.UpdateAddressRequest true "Request body"
+// @Success 200 {object} dto.UpdateAddressResponse
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /admin/address [post]
 func (h *AddressHandler) UpdateAddress(c *gin.Context) {
 	var req dto.UpdateAddressRequest
 	if !utils.BindJSON(c, &req, h.logger) {
@@ -168,6 +180,7 @@ func (h *AddressHandler) UpdateAddress(c *gin.Context) {
 	if err != nil {
 		h.logger.Error("failed to update address", "address", req, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 	response := dto.UpdateAddressResponse{
 		Data: dto.ToAddressDTO(output.Address),
