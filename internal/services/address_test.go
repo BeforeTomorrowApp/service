@@ -388,3 +388,27 @@ func TestAddressService_UpdateAddress_Error(t *testing.T) {
 	assert.Nil(t, output)
 	assert.Error(t, err)
 }
+
+func TestAddressService_DeleteAddress(t *testing.T) {
+	t.Parallel()
+	repo := new(mockAddressRepository)
+	llm := new(mockLLMClient)
+	service := NewAddressService(repo, llm)
+	input := DeleteAddressInput{Language: "en", ID: "1"}
+	repo.On("DeleteAddress", mock.Anything, mock.Anything).Return(input.ID, nil).Once()
+	output, err := service.DeleteAddress(context.Background(), input)
+	assert.NotNil(t, output)
+	assert.Equal(t, input.ID, output.ID)
+	assert.Nil(t, err)
+}
+func TestAddressService_DeleteAddress_Error(t *testing.T) {
+	t.Parallel()
+	repo := new(mockAddressRepository)
+	llm := new(mockLLMClient)
+	service := NewAddressService(repo, llm)
+	input := DeleteAddressInput{Language: "en", ID: "1"}
+	repo.On("DeleteAddress", mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
+	output, err := service.DeleteAddress(context.Background(), input)
+	assert.NotNil(t, err)
+	assert.Nil(t, output)
+}
