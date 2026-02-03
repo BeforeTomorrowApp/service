@@ -15,12 +15,12 @@ import (
 )
 
 const (
-	addressTablePrefix     = "addresses"
-	tagsTablePrefix        = "tag"
-	getByNameLimit         = 10
-	tagsSimilarityLimit    = 0.6
-	refreshTagsBatchSize   = 100 // Process addresses in batches to avoid memory issues
-	refreshTagsRateLimitMs = 50  // Milliseconds to wait between batches for rate limiting
+	addressTablePrefix   = "addresses"
+	tagsTablePrefix      = "tag"
+	getByNameLimit       = 10
+	tagsSimilarityLimit  = 0.6
+	refreshTagsBatchSize = 100                   // Process addresses in batches to avoid memory issues
+	refreshTagsRateLimit = 50 * time.Millisecond // Time to wait between batches for rate limiting
 )
 
 var tagCategories = []string{"country", "role", "figure"}
@@ -322,8 +322,8 @@ func (r *AddressRepository) RefreshTags(ctx context.Context, opts RefreshTagsOpt
 		}
 
 		// Rate limiting: sleep between batches to avoid overwhelming the database
-		if refreshTagsRateLimitMs > 0 {
-			time.Sleep(time.Duration(refreshTagsRateLimitMs) * time.Millisecond)
+		if refreshTagsRateLimit > 0 {
+			time.Sleep(refreshTagsRateLimit)
 		}
 	}
 
