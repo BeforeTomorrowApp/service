@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	addressTablePrefix  = "addresses"
-	tagsTablePrefix     = "tag"
-	getByNameLimit      = 10
-	tagsSimilarityLimit = 0.6
+	addressTablePrefix     = "addresses"
+	tagsTablePrefix        = "tag"
+	getByNameLimit         = 10
+	tagsSimilarityLimit    = 0.6
+	refreshTagsBatchSize   = 100 // Process addresses in batches to avoid memory issues
+	refreshTagsRateLimitMs = 50  // Milliseconds to wait between batches for rate limiting
 )
 
 var tagCategories = []string{"country", "role", "figure"}
@@ -258,36 +260,76 @@ func (r *AddressRepository) CreateNewAddress(ctx context.Context, opts CreateNew
 
 func (r *AddressRepository) RefreshTags(ctx context.Context, opts RefreshTagsOption) (*models.TagsRecord, error) {
 	collectionName := getAddressCollectionName(opts.Language)
-	iter := r.client.Collection(collectionName).Documents(ctx)
-	defer iter.Stop()
+
+	// Initialize tag sets for each category
 	tagSet := map[string]map[string]struct{}{}
 	for _, category := range tagCategories {
 		tagSet[category] = make(map[string]struct{})
 	}
-	// iterate over the database
+
+	// Process addresses in batches with pagination to avoid full collection scan
+	var lastDoc *firestore.DocumentSnapshot
+	processedCount := 0
+
 	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
+		// Build query with pagination
+		query := r.client.Collection(collectionName).OrderBy(firestore.DocumentID, firestore.Asc).Limit(refreshTagsBatchSize)
+		if lastDoc != nil {
+			query = query.StartAfter(lastDoc)
 		}
-		if err != nil {
-			r.logger.Error("failed to iterate documents for tags", "error", err)
-			return nil, fmt.Errorf("failed to fetch address for tags: %w", err)
-		}
-		var address models.AddressItem
-		if err := doc.DataTo(&address); err != nil {
-			r.logger.Warn("failed to parse document for tags", "docID", doc.Ref.ID, "error", err)
-			continue
-		}
-		for i, tag := range address.Tags {
-			if i >= len(tagCategories) {
-				r.logger.Warn("tag index exceeds tagCategories length, skipping tag", "docID", doc.Ref.ID, "tagIndex", i, "tag", tag)
+
+		// Execute query for current batch
+		iter := query.Documents(ctx)
+		batchCount := 0
+
+		for {
+			doc, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				iter.Stop()
+				r.logger.Error("failed to iterate documents for tags", "error", err, "processedCount", processedCount)
+				return nil, fmt.Errorf("failed to fetch address for tags: %w", err)
+			}
+
+			var address models.AddressItem
+			if err := doc.DataTo(&address); err != nil {
+				r.logger.Warn("failed to parse document for tags", "docID", doc.Ref.ID, "error", err)
 				continue
 			}
-			tagSet[tagCategories[i]][tag] = struct{}{}
+
+			// Extract tags from address
+			for i, tag := range address.Tags {
+				if i >= len(tagCategories) {
+					r.logger.Warn("tag index exceeds tagCategories length, skipping tag", "docID", doc.Ref.ID, "tagIndex", i, "tag", tag)
+					continue
+				}
+				tagSet[tagCategories[i]][tag] = struct{}{}
+			}
+
+			lastDoc = doc
+			batchCount++
+		}
+		iter.Stop()
+
+		processedCount += batchCount
+		r.logger.Info("processed batch of addresses for tag refresh", "batchSize", batchCount, "totalProcessed", processedCount)
+
+		// If we got fewer documents than batch size, we've reached the end
+		if batchCount < refreshTagsBatchSize {
+			break
+		}
+
+		// Rate limiting: sleep between batches to avoid overwhelming the database
+		if refreshTagsRateLimitMs > 0 {
+			time.Sleep(time.Duration(refreshTagsRateLimitMs) * time.Millisecond)
 		}
 	}
-	// create unique tag set for each field
+
+	r.logger.Info("completed tag refresh scan", "totalAddresses", processedCount)
+
+	// Create unique tag set for each field
 	uniqueTagSet := make(map[string][]string)
 	for _, category := range tagCategories {
 		uniqueTags := make([]string, 0, len(tagSet[category]))
@@ -297,7 +339,8 @@ func (r *AddressRepository) RefreshTags(ctx context.Context, opts RefreshTagsOpt
 		slices.Sort(uniqueTags) // sort tag alphabetically
 		uniqueTagSet[category] = uniqueTags
 	}
-	// save data to "tag" collection
+
+	// Save data to "tag" collection
 	tagCollectionName := getTagCollectionName(opts.Language)
 	tagDocRef := r.client.Collection(tagCollectionName).Doc("all_tags")
 	tagsRecord := models.TagsRecord{
