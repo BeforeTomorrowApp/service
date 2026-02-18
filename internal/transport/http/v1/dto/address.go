@@ -46,8 +46,8 @@ type UpdateAddressResponse struct {
 	Data AddressItemDTO `json:"data"`
 }
 
-type GetTagsResponse struct {
-	Data models.TagsRecord `json:"data"`
+type GetAllTagsResponse struct {
+	Data TagsRecordDTO `json:"data"`
 }
 
 type DeleteAddressResponse struct {
@@ -94,16 +94,10 @@ type GetAllAddressesResponseDTO struct {
 	Language   models.Language  `json:"language"`
 }
 
-func FromAddressDTO(address AddressDTO) models.Address {
-	return models.Address{
-		Country:      address.Country,
-		City:         address.City,
-		Line1:        address.Line1,
-		Line2:        address.Line2,
-		BuildingName: address.BuildingName,
-		PostalCode:   address.PostalCode,
-		Region:       address.Region,
-	}
+type TagsRecordDTO struct {
+	Tags        map[string][]string `json:"tags"`
+	RefreshedAt int64               `json:"refreshedAt"`
+	Language    models.Language     `json:"language"`
 }
 
 func ToAddressDTO(addressItem models.AddressItem) AddressItemDTO {
@@ -143,6 +137,26 @@ func ToGetAllAddressesResponseDTO(output *services.GetAllAddressesOutput, langua
 		LastDocID:  output.LastDocID,
 		HasMore:    output.HasMore,
 		Language:   language,
+	}
+}
+
+func ToTagsRecordDTO(tagsRecord models.TagsRecord, language models.Language) TagsRecordDTO {
+	return TagsRecordDTO{
+		Tags:        tagsRecord.Tags,
+		RefreshedAt: tagsRecord.RefreshedAt,
+		Language:    language,
+	}
+}
+
+func FromAddressDTO(address AddressDTO) models.Address {
+	return models.Address{
+		Country:      address.Country,
+		City:         address.City,
+		Line1:        address.Line1,
+		Line2:        address.Line2,
+		BuildingName: address.BuildingName,
+		PostalCode:   address.PostalCode,
+		Region:       address.Region,
 	}
 }
 

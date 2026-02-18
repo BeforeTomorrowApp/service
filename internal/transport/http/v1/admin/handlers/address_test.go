@@ -603,13 +603,15 @@ func TestGetAllTags_GetAllTags(t *testing.T) {
 	tests := []struct {
 		name           string
 		url            string
+		language       models.Language
 		mockOutput     *services.GetAllTagsOutput
 		mockError      error
 		expectedStatus int
 	}{
 		{
-			name: "success with refresh parameter",
-			url:  "/admin/address/tags?language=zh&refresh=false",
+			name:     "success with refresh parameter",
+			url:      "/admin/address/tags?language=ZH&refresh=false",
+			language: "ZH",
 			mockOutput: &services.GetAllTagsOutput{TagsRecord: models.TagsRecord{
 				RefreshedAt: 123,
 				Tags:        map[string][]string{"test": {"test", "test2"}}},
@@ -618,8 +620,9 @@ func TestGetAllTags_GetAllTags(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "success without refresh parameter",
-			url:  "/admin/address/tags?language=zh",
+			name:     "success without refresh parameter",
+			url:      "/admin/address/tags?language=ZH",
+			language: "ZH",
 			mockOutput: &services.GetAllTagsOutput{TagsRecord: models.TagsRecord{
 				RefreshedAt: 123,
 				Tags:        map[string][]string{"test": {"test", "test2"}}},
@@ -629,7 +632,8 @@ func TestGetAllTags_GetAllTags(t *testing.T) {
 		},
 		{
 			name:           "failed request",
-			url:            "/admin/address/tags?language=zh",
+			url:            "/admin/address/tags?language=EN",
+			language:       "EN",
 			mockOutput:     nil,
 			mockError:      errors.New("failed request"),
 			expectedStatus: http.StatusInternalServerError,
@@ -644,6 +648,10 @@ func TestGetAllTags_GetAllTags(t *testing.T) {
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			if tt.mockError == nil {
+				var response dto.GetAllTagsResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.language, response.Data.Language)
 				mockSrv.AssertExpectations(t)
 			}
 		})
