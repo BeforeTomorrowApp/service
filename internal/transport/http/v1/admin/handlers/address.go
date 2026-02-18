@@ -302,7 +302,7 @@ func (h *AddressHandler) GetAllTags(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid refresh parameter"})
 		return
 	}
-	var response dto.GetTagsResponse
+	var response dto.GetAllTagsResponse
 	if shouldRefresh {
 		input := services.RefreshTagsInput{Language: language}
 		output, err := h.service.RefreshTags(c.Request.Context(), input)
@@ -311,7 +311,7 @@ func (h *AddressHandler) GetAllTags(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		response = dto.GetTagsResponse{Data: output.TagsRecord}
+		response = dto.GetAllTagsResponse{Data: dto.ToTagsRecordDTO(output.TagsRecord, language)}
 	} else {
 		input := services.GetAllTagsInput{Language: language}
 		output, err := h.service.GetAllTags(c.Request.Context(), input)
@@ -320,7 +320,7 @@ func (h *AddressHandler) GetAllTags(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		response = dto.GetTagsResponse{Data: output.TagsRecord}
+		response = dto.GetAllTagsResponse{Data: dto.ToTagsRecordDTO(output.TagsRecord, language)}
 	}
 	c.JSON(http.StatusOK, response)
 }
